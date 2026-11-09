@@ -70,7 +70,7 @@
         <input type="text" id="driverName" readonly required>
       </div>
       
-      <!-- 車號選單 (因為只有一般車輛有季檢，系統會自動鎖定並列出該區隊的一般車輛) -->
+      <!-- 車號選單 -->
       <div class="form-group">
         <label>車牌號碼 (一般車輛)：</label>
         <select id="vehicleId" required>
@@ -97,14 +97,13 @@
   </div>
 
   <script>
-    // ⚠️⚠️⚠️ 請在此填入您的 GAS 網址與 LIFF ID ⚠️⚠️⚠️
+    // 專屬網址與 ID
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwOy47jQehglAT1MgdEOieU2bs_CP2j69UTm7zOrO5ukVyhT-f1xLMiwowgDaTRcjzUmg/exec"; 
     const LIFF_ID = "2012500827-crGYsKu6"; 
     
     let globalVehicleData = {};
     let currentUserId = "";
 
-    // 完整的檢查項目與對應的「檢查方法」
     const itemsData = [
       { id: "item1", name: "1. 胎壓", method: "初步目視、敲打測試", options: ["正常", "異常", "無此項"], trigger: "異常" },
       { id: "item2", name: "2. 輪胎紋路", method: "不得低於2mm", options: ["正常", "異常", "無此項"], trigger: "異常" },
@@ -124,6 +123,13 @@
 
     const container = document.getElementById('inspectionItems');
     itemsData.forEach(item => {
+      // 根據題目動態決定提示字眼與單選選項
+      let alertText = (item.id === "item14") ? "⚠️ 駕照已逾期！請勾選處置方式：" : "⚠️ 發現異常！請勾選處置方式：";
+      let radioOptions = (item.id === "item14") 
+        ? `<label><input type="radio" name="${item.id}_radio" value="補審驗換發"> 補審驗換發</label>`
+        : `<label><input type="radio" name="${item.id}_radio" value="自行修復"> 自行修復</label>
+           <label><input type="radio" name="${item.id}_radio" value="進廠檢修"> 進廠檢修</label>`;
+
       let html = `
         <div class="form-group">
           <label>${item.name}</label>
@@ -137,9 +143,8 @@
             </div>
           </div>
           <div id="${item.id}_action" class="action-box">
-            <div style="margin-bottom: 8px; font-weight: bold; color: #d35400;">⚠️ 發現異常！請勾選處置方式：</div>
-            <label><input type="radio" name="${item.id}_radio" value="自行修復"> 自行修復</label>
-            <label><input type="radio" name="${item.id}_radio" value="進廠檢修"> 進廠檢修</label>
+            <div style="margin-bottom: 8px; font-weight: bold; color: #d35400;">${alertText}</div>
+            ${radioOptions}
           </div>
         </div>`;
       container.innerHTML += html;
@@ -191,7 +196,7 @@
     
     window.clearCanvas = function() { resizeCanvas(); };
 
-    // --- 系統啟動流程 ---
+    // 系統啟動流程
     window.onload = function() {
       resizeCanvas();
       fetchVehicleData(); 
@@ -227,7 +232,6 @@
         if (data.found) {
           document.getElementById('squadName').value = data.squad;
           document.getElementById('driverName').value = data.name;
-          // 自動載入該區隊的「一般車輛」
           populateGeneralVehicles(data.squad);
           document.getElementById('checkForm').classList.remove('hidden');
         } else {
@@ -242,12 +246,9 @@
       Object.keys(globalVehicleData).forEach(squad => sel.innerHTML += `<option value="${squad}">${squad}</option>`);
     }
 
-    // 專門抓取「一般車輛」的函數
     function populateGeneralVehicles(squad) {
       const sel = document.getElementById('vehicleId');
       sel.innerHTML = '<option value="">-- 請選擇車牌號碼 --</option>';
-      
-      // 直接鎖定讀取該區隊的 "一般車輛" 分類
       if (squad && globalVehicleData[squad] && globalVehicleData[squad]["一般車輛"]) {
         globalVehicleData[squad]["一般車輛"].forEach(vNo => {
           sel.innerHTML += `<option value="${vNo}">${vNo}</option>`;
@@ -296,7 +297,7 @@
 
       const formData = {
         squad: document.getElementById('squadName').value,
-        vehicleType: "一般車輛", // 寫死為一般車輛，後端會自動拋轉到 [區隊]-一般車輛季檢
+        vehicleType: "一般車輛",
         driverName: document.getElementById('driverName').value,
         vehicleId: document.getElementById('vehicleId').value,
         item1: getCombinedResult("item1"), item2: getCombinedResult("item2"), item3: getCombinedResult("item3"),
