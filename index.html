@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>車輛自動檢查表(季檢)</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 10px; background: #f4f4f9; color: #111; margin: 0; }
+    .container { max-width: 600px; margin: auto; background: white; padding: 20px 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; font-size: 26px; border-bottom: 3px solid #3498db; padding-bottom: 12px; font-weight: 900;}
+    .form-group { margin-bottom: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 15px; }
+    label { display: block; margin-bottom: 8px; font-weight: 900; font-size: 22px; color: #000;}
+    input[type="text"], select, textarea { width: 100%; padding: 14px; border: 2px solid #aaa; border-radius: 8px; box-sizing: border-box; font-size: 20px; background: #fff;}
+    input:read-only { background-color: #e9ecef; color: #333; }
+    .action-box { display: none; margin-top: 15px; background: #fff3cd; padding: 12px; border-radius: 8px; border-left: 5px solid #ffc107; }
+    .action-box label { display: inline-block; margin-right: 15px; font-weight: bold; font-size: 18px; color: #856404; margin-top: 5px; cursor: pointer;}
+    .action-box input[type="radio"] { width: 20px; height: 20px; vertical-align: middle; margin-right: 5px;}
+    .canvas-container { border: 3px dashed #3498db; border-radius: 8px; background: #fafafa; margin-bottom: 10px; }
+    canvas { width: 100%; height: 200px; display: block; touch-action: none; cursor: crosshair; }
+    .clear-btn { background: #95a5a6; color: white; border: none; padding: 12px 15px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; margin-top: 5px;}
+    .btn-submit { width: 100%; padding: 20px; background: #3498db; color: white; border: none; border-radius: 10px; font-size: 24px; font-weight: 900; cursor: pointer; margin-top: 10px; transition: 0.3s; }
+    .btn-submit:disabled { background: #95a5a6; cursor: not-allowed; }
+    #loading { text-align: center; padding: 30px 10px; font-size: 20px; font-weight: bold; color: #d35400;}
+    .hidden { display: none; }
+    .status-layout { display: flex; gap: 10px; margin-top: 10px; }
+    .btn-status { background: white; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; justify-content: center;}
+    .btn-status.active { color: white; }
+    .btn-main { flex: 2; font-size: 26px; padding: 20px 10px; color: #27ae60; border-color: #27ae60; letter-spacing: 2px;}
+    .btn-main.active { background: #27ae60; border-color: #27ae60; }
+    .side-group { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .btn-side { flex: 1; font-size: 16px; padding: 10px; }
+    .btn-sub-1 { color: #e74c3c; border-color: #e74c3c; }
+    .btn-sub-1.active { background: #e74c3c; border-color: #e74c3c; }
+    .btn-sub-2 { color: #7f8c8d; border-color: #7f8c8d; }
+    .btn-sub-2.active { background: #7f8c8d; border-color: #7f8c8d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📋 車輛自動檢查表(季檢)</h2>
+    
+    <div id="loading">🔄 系統初始化與車輛資料載入中...</div>
+
+    <!-- 第一次登入的註冊畫面 -->
+    <div id="registerBox" class="hidden">
+      <h3>👋 歡迎使用！請進行初次綁定</h3>
+      <div class="form-group" style="border:none; padding-bottom: 5px;">
+        <label>所屬區隊：</label>
+        <select id="regSquad" required>
+          <option value="">-- 請選擇您的區隊 --</option>
+        </select>
+      </div>
+      <div class="form-group" style="border:none;">
+        <label>真實姓名：</label>
+        <input type="text" id="regName" placeholder="例如：王小明" required>
+        <div style="font-size: 14px; color: #e74c3c; margin-top: 8px;">⚠️ 請填寫真實姓名，綁定後將自動帶入表單。</div>
+      </div>
+      <button type="button" class="btn-submit" style="background:#27ae60;" onclick="submitRegistration(event)">完成綁定並進入</button>
+    </div>
+
+    <!-- 季檢主表單 -->
+    <form id="checkForm" class="hidden" onsubmit="submitForm(event)">
+      <div class="form-group">
+        <label>所屬區隊：</label>
+        <input type="text" id="squadName" readonly required>
+      </div>
+      <div class="form-group">
+        <label>檢查人員：</label>
+        <input type="text" id="driverName" readonly required>
+      </div>
+      
+      <!-- 👇 新增的車種選擇下拉選單 -->
+      <div class="form-group">
+        <label>車輛種類：</label>
+        <select id="vehicleType" required onchange="updateVehicleList()">
+          <option value="">-- 請先選擇車種 --</option>
+          <option value="一般車輛">一般車輛</option>
+          <option value="抓斗車">抓斗車</option>
+          <option value="鏟裝機">鏟裝機</option>
+          <option value="高空工作車">高空工作車</option>
+          <option value="堆高機">堆高機</option>
+        </select>
+      </div>
+
+      <!-- 👇 根據車種連動的車號選單 -->
+      <div class="form-group">
+        <label>車牌號碼：</label>
+        <select id="vehicleId" required>
+          <option value="">-- 請先選擇上方車種 --</option>
+        </select>
+      </div>
+      
+      <div id="inspectionItems"></div>
+
+      <div class="form-group">
+        <label>整體檢查結果採取或建議之改善措施：</label>
+        <textarea id="measureNote" rows="3" placeholder="若無特殊狀況可留空..."></textarea>
+      </div>
+
+      <div class="form-group" style="border: none; padding-bottom: 0;">
+        <label>✍️ 檢查人員親筆簽名 (必填)：</label>
+        <div class="canvas-container"><canvas id="sigCanvas"></canvas></div>
+        <button type="button" class="clear-btn" onclick="clearCanvas()">✖ 清除重新簽名</button>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn-submit">確認送出季檢表</button>
+    </form>
+  </div>
+
+  <script>
+    // ⚠️⚠️⚠️ 請在此填入您的新版 GAS 網址與 LIFF ID ⚠️⚠️⚠️
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwOy47jQehglAT1MgdEOieU2bs_CP2j69UTm7zOrO5ukVyhT-f1xLMiwowgDaTRcjzUmg/exec"; 
+    const LIFF_ID = "2012500827-crGYsKu6"; 
+    
+    let globalVehicleData = {};
+    let currentUserId = "";
+
+    const itemsData = [
+      { id: "item1", name: "1. 胎壓", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item2", name: "2. 輪胎紋路", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item3", name: "3. 監視主機", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item4", name: "4. 引擎機油液位", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item5", name: "5. 煞車油液位", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item6", name: "6. 動力方向機油液位", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item7", name: "7. 電瓶水液位", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item8", name: "8. 雨刷水", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item9", name: "9. 水箱水位", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item10", name: "10. 變速箱等機件", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item11", name: "11. 減震鋼板", options: ["良好", "異常", "無此項"], trigger: "異常" },
+      { id: "item12", name: "12. 附屬安全裝置", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item13", name: "13. 燈光警示系統", options: ["正常", "異常", "無此項"], trigger: "異常" },
+      { id: "item14", name: "14. 駕駛駕照效期", options: ["正常", "逾期", "0"], trigger: "逾期" }
+    ];
+
+    const container = document.getElementById('inspectionItems');
+    itemsData.forEach(item => {
+      let html = `
+        <div class="form-group">
+          <label>${item.name}</label>
+          <input type="hidden" id="${item.id}" value="${item.options[0]}" required>
+          <div class="status-layout">
+            <button type="button" class="btn-status btn-main active" onclick="setBtnStatus('${item.id}', '${item.options[0]}', '${item.trigger}', this)">✅ ${item.options[0]}</button>
+            <div class="side-group">
+              <button type="button" class="btn-status btn-side btn-sub-1" onclick="setBtnStatus('${item.id}', '${item.options[1]}', '${item.trigger}', this)">🔧 ${item.options[1]}</button>
+              <button type="button" class="btn-status btn-side btn-sub-2" onclick="setBtnStatus('${item.id}', '${item.options[2]}', '${item.trigger}', this)">➖ ${item.options[2]}</button>
+            </div>
+          </div>
+          <div id="${item.id}_action" class="action-box">
+            <div style="margin-bottom: 8px; font-weight: bold; color: #d35400;">⚠️ 發現異常！請勾選處置方式：</div>
+            <label><input type="radio" name="${item.id}_radio" value="自行修復"> 自行修復</label>
+            <label><input type="radio" name="${item.id}_radio" value="進廠檢修"> 進廠檢修</label>
+          </div>
+        </div>`;
+      container.innerHTML += html;
+    });
+
+    window.setBtnStatus = function(id, val, triggerWord, clickedBtn) {
+      document.getElementById(id).value = val;
+      const layout = clickedBtn.closest('.status-layout');
+      layout.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
+      clickedBtn.classList.add('active');
+      const actionBox = document.getElementById(id + "_action");
+      const radios = document.getElementsByName(id + "_radio");
+      if (val === triggerWord) {
+        actionBox.style.display = "block";
+        radios.forEach(r => r.required = true);
+      } else {
+        actionBox.style.display = "none";
+        radios.forEach(r => { r.required = false; r.checked = false; });
+      }
+    };
+
+    // 簽名板功能
+    const canvas = document.getElementById('sigCanvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false, hasSigned = false;
+    
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.offsetWidth;
+      canvas.height = 200;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#000';
+      hasSigned = false;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    
+    function getCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+      return { x: e.offsetX, y: e.offsetY };
+    }
+
+    canvas.addEventListener('mousedown', (e) => { isDrawing = hasSigned = true; ctx.beginPath(); ctx.moveTo(getCoords(e).x, getCoords(e).y); e.preventDefault(); });
+    canvas.addEventListener('mousemove', (e) => { if(isDrawing){ ctx.lineTo(getCoords(e).x, getCoords(e).y); ctx.stroke(); e.preventDefault();} });
+    canvas.addEventListener('mouseup', () => isDrawing = false);
+    canvas.addEventListener('mouseout', () => isDrawing = false);
+    canvas.addEventListener('touchstart', (e) => { isDrawing = hasSigned = true; ctx.beginPath(); ctx.moveTo(getCoords(e).x, getCoords(e).y); e.preventDefault(); }, {passive: false});
+    canvas.addEventListener('touchmove', (e) => { if(isDrawing){ ctx.lineTo(getCoords(e).x, getCoords(e).y); ctx.stroke(); e.preventDefault();} }, {passive: false});
+    canvas.addEventListener('touchend', () => isDrawing = false);
+    
+    window.clearCanvas = function() { resizeCanvas(); };
+
+    // --- 系統啟動流程 ---
+    window.onload = function() {
+      resizeCanvas();
+      fetchVehicleData(); // 先跟伺服器要全環保局車庫名單
+    };
+
+    function fetchVehicleData() {
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: "getVehicles" }) })
+      .then(res => res.json())
+      .then(result => {
+        if(result.status === "Success") {
+          globalVehicleData = result.data;
+          initLiff(); 
+        } else {
+          Swal.fire('錯誤', '無法載入車輛資料表', 'error');
+        }
+      }).catch(err => Swal.fire('網路錯誤', '車輛資料載入失敗', 'error'));
+    }
+
+    function initLiff() {
+      liff.init({ liffId: LIFF_ID, withLoginOnExternalBrowser: true })
+        .then(() => {
+          if (!liff.isLoggedIn()) liff.login();
+          else liff.getProfile().then(p => { currentUserId = p.userId; checkUser(p.userId); });
+        }).catch(err => Swal.fire('LIFF 錯誤', err.toString(), 'error'));
+    }
+
+    function checkUser(userId) {
+      document.getElementById('loading').innerText = "🔄 正在確認人員編制...";
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: "checkUser", userId: userId }) })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('loading').classList.add('hidden');
+        if (data.found) {
+          document.getElementById('squadName').value = data.squad;
+          document.getElementById('driverName').value = data.name;
+          document.getElementById('checkForm').classList.remove('hidden');
+        } else {
+          populateSquadDropdown();
+          document.getElementById('registerBox').classList.remove('hidden');
+        }
+      });
+    }
+
+    // 註冊時填入所有區隊
+    function populateSquadDropdown() {
+      const sel = document.getElementById('regSquad');
+      Object.keys(globalVehicleData).forEach(squad => sel.innerHTML += `<option value="${squad}">${squad}</option>`);
+    }
+
+    // 選擇車種時，動態帶入該區隊該車種的車號
+    window.updateVehicleList = function() {
+      const squad = document.getElementById('squadName').value;
+      const vType = document.getElementById('vehicleType').value;
+      const sel = document.getElementById('vehicleId');
+      sel.innerHTML = '<option value="">-- 請選擇車牌號碼 --</option>';
+      
+      if (squad && vType && globalVehicleData[squad] && globalVehicleData[squad][vType]) {
+        globalVehicleData[squad][vType].forEach(vNo => {
+          sel.innerHTML += `<option value="${vNo}">${vNo}</option>`;
+        });
+      }
+    };
+
+    function submitRegistration(event) {
+      const squad = document.getElementById('regSquad').value;
+      const name = document.getElementById('regName').value.trim();
+      if (!squad || !name) return Swal.fire('提醒', '請完整選擇區隊並輸入姓名！', 'warning');
+
+      event.target.disabled = true;
+      event.target.innerText = '⏳ 綁定中...';
+
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: "registerUser", userId: currentUserId, name: name, squad: squad }) })
+      .then(res => res.json())
+      .then(result => {
+        if (result.status === "Success") {
+          Swal.fire({ icon: 'success', title: '✅ 綁定成功', text: `區隊：${squad}\n人員：${name}`, confirmButtonColor: '#3498db' })
+          .then(() => location.reload()); // 重新整理網頁載入新身分
+        }
+      });
+    }
+
+    function getCombinedResult(id) {
+      const main = document.getElementById(id).value;
+      const box = document.getElementById(id + "_action");
+      if (box.style.display === "block") {
+        const radio = document.querySelector(`input[name="${id}_radio"]:checked`);
+        if (radio) return main + " (" + radio.value + ")";
+      }
+      return main;
+    }
+
+    function submitForm(event) {
+      event.preventDefault();
+      if (!document.getElementById('vehicleId').value) return Swal.fire('提醒', '請選擇車牌號碼！', 'warning');
+      if (!hasSigned) return Swal.fire('缺少簽名', '📝 請在最下方親筆簽名！', 'warning');
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true; 
+      btn.innerText = "⏳ 檢查表上傳中...";
+
+      const formData = {
+        squad: document.getElementById('squadName').value,
+        vehicleType: document.getElementById('vehicleType').value,
+        driverName: document.getElementById('driverName').value,
+        vehicleId: document.getElementById('vehicleId').value,
+        item1: getCombinedResult("item1"), item2: getCombinedResult("item2"), item3: getCombinedResult("item3"),
+        item4: getCombinedResult("item4"), item5: getCombinedResult("item5"), item6: getCombinedResult("item6"),
+        item7: getCombinedResult("item7"), item8: getCombinedResult("item8"), item9: getCombinedResult("item9"),
+        item10: getCombinedResult("item10"), item11: getCombinedResult("item11"), item12: getCombinedResult("item12"),
+        item13: getCombinedResult("item13"), item14: getCombinedResult("item14"),
+        measureNote: document.getElementById('measureNote').value,
+        signature: canvas.toDataURL("image/png")
+      };
+
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: "saveQuarterly", data: formData }) })
+      .then(res => res.json())
+      .then(result => {
+        if (result.status === "Success") {
+          Swal.fire({
+            icon: 'success', title: '✅ 送出成功！', text: '季檢表已建檔完畢',
+            confirmButtonColor: '#27ae60', confirmButtonText: '關閉視窗', allowOutsideClick: false
+          }).then((res) => { if (res.isConfirmed) liff.closeWindow(); });
+        } else {
+          Swal.fire('❌ 儲存失敗', result.status, 'error');
+          btn.disabled = false; btn.innerText = "確認送出季檢表";
+        }
+      }).catch(err => {
+        Swal.fire('❌ 送出失敗', err.message, 'error');
+        btn.disabled = false; btn.innerText = "確認送出季檢表";
+      });
+    }
+  </script>
+</body>
+</html>
